@@ -52,7 +52,7 @@ bootstrap: ## Download and install all project dependencies (+ prep tooling in t
 	go mod download || exit 1
 	cat tools.go | grep _ | awk -F'"' '{print $$2}' | xargs -tI % env GOBIN=$(BIN) go install % || exit 1
 	# install golangci-lint
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(BIN) v1.47.2 || exit 1
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(BIN) v1.50.1 || exit 1
 	# install pkger
 	cd $(TMP) && curl -sLO https://github.com/markbates/pkger/releases/download/v0.17.0/pkger_0.17.0_$(shell uname)_x86_64.tar.gz && \
 		tar -xzvf pkger_0.17.0_$(shell uname)_x86_64.tar.gz pkger && \
