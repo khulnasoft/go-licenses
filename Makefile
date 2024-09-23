@@ -7,18 +7,28 @@ COVER_REPORT = $(RESULTS)/cover.report
 COVER_TOTAL = $(RESULTS)/cover.total
 LINTCMD = $(BIN)/golangci-lint run --tests=false --config .golangci.yaml
 
-BOLD := $(shell tput -T linux bold)
-PURPLE := $(shell tput -T linux setaf 5)
-GREEN := $(shell tput -T linux setaf 2)
-CYAN := $(shell tput -T linux setaf 6)
-RED := $(shell tput -T linux setaf 1)
-RESET := $(shell tput -T linux sgr0)
+# Color definitions with checks for OS
+ifeq ($(OS),Windows_NT)
+    BOLD := ""
+    PURPLE := ""
+    GREEN := ""
+    CYAN := ""
+    RED := ""
+    RESET := ""
+else
+    BOLD := $(shell tput -T linux bold)
+    PURPLE := $(shell tput -T linux setaf 5)
+    GREEN := $(shell tput -T linux setaf 2)
+    CYAN := $(shell tput -T linux setaf 6)
+    RED := $(shell tput -T linux setaf 1)
+    RESET := $(shell tput -T linux sgr0)
+endif
+
 TITLE := $(BOLD)$(PURPLE)
 SUCCESS := $(BOLD)$(GREEN)
-# the quality gate lower threshold for unit test total % coverage (by function statements)
 COVERAGE_THRESHOLD := 55
 
-RELAESE_CMD=$(BIN)/goreleaser --rm-dist
+RELEASE_CMD=$(BIN)/goreleaser --rm-dist
 
 ifndef TMP
     $(error TMP is not set)
@@ -32,7 +42,7 @@ define title
     @printf '$(TITLE)$(1)$(RESET)\n'
 endef
 
-.PHONY: all bootstrap lint lint-fix unit coverage help test
+.PHONY: all bootstrap lint lint-fix unit coverage help test clean
 
 all: lint test ## Run all checks (linting, unit tests, and integration tests)
 	@printf '$(SUCCESS)All checks pass!$(RESET)\n'
@@ -44,20 +54,13 @@ help:
 
 bootstrap: ## Download and install all project dependencies (+ prep tooling in the ./.tmp dir)
 	$(call title,Downloading dependencies)
-	# prep temp dirs
-	mkdir -p $(TMP)
-	mkdir -p $(RESULTS)
-	mkdir -p $(BIN)
-	# download install project dependencies + tooling
+	mkdir -p $(TMP) $(RESULTS) $(BIN)  # Create necessary directories
 	go mod download
 	cat tools.go | grep _ | awk -F'"' '{print $$2}' | xargs -tI % env GOBIN=$(BIN) go install %
-	# install golangci-lint
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(BIN) v1.47.2
-	# install pkger
 	cd $(TMP) && curl -sLO https://github.com/markbates/pkger/releases/download/v0.17.0/pkger_0.17.0_$(shell uname)_x86_64.tar.gz && \
 		tar -xzvf pkger_0.17.0_$(shell uname)_x86_64.tar.gz pkger && \
 		mv pkger $(BIN)
-	# install goreleaser
 	GOBIN=$(BIN) go install github.com/goreleaser/goreleaser@v1.3.1
 
 $(DBASSET):
@@ -89,7 +92,7 @@ unit: ## Run unit tests (with coverage)
 	fi
 
 ci-build-snapshot-packages: pkged.go
-	$(RELAESE_CMD) \
+	$(RELEASE_CMD) \
 		--snapshot \
 		--skip-publish 
 
@@ -126,9 +129,9 @@ ci-test-mac-arm-run:
 	./dist/darwin-build_darwin_arm64/golicenses list github.com/khulnasoft/go-licenses
 
 ci-test-windows-run:
-	chmod 755 ./dist/windows-build_windows_amd64/golicenses.exe && \
-	./dist/windows-build_windows_amd64/golicenses.exe version && \
-	./dist/windows-build_windows_amd64/golicenses.exe list github.com/khulnasoft/go-licenses
+	@echo "Running Windows tests..."
+	@powershell -Command "Start-Process -NoNewWindow -File ./dist/windows-build_windows_amd64/golicenses.exe -ArgumentList 'version' -Wait"
+	@powershell -Command "Start-Process -NoNewWindow -File ./dist/windows-build_windows_amd64/golicenses.exe -ArgumentList 'list github.com/khulnasoft/go-licenses' -Wait"
 
 ci-release: pkged.go
 	$(BIN)/goreleaser --rm-dist
