@@ -84,7 +84,7 @@ jobs:
         with:
           go-version: '1.18.x'
       - uses: actions/checkout@master
-      - uses: actions/download-artifact@master
+      - uses: actions/download-artifact@v3
         with:
           name: artifacts
           path: dist
@@ -124,7 +124,7 @@ jobs:
         with:
           go-version: '1.18.x'
       - uses: actions/checkout@master
-      - uses: actions/download-artifact@master
+      - uses: actions/download-artifact@v3
         with:
           name: artifacts
           path: dist
