@@ -5,10 +5,11 @@ on:
   pull_request:
     branches:
       - master
+  pull_request_target:  # Optional, for analyzing PRs from forks securely
 
 jobs:
   analyze:
-    name: Analyze
+    name: Analyze CodeQL
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -19,20 +20,19 @@ jobs:
       fail-fast: false
       matrix:
         language: [ 'go' ]
-        # CodeQL supports [ 'cpp', 'csharp', 'go', 'java', 'javascript', 'python' ]
+        # CodeQL supports: ['cpp', 'csharp', 'go', 'java', 'javascript', 'python']
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    # Initializes the CodeQL tools for scanning.
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v2
-      with:
-        languages: ${{ matrix.language }}
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
 
-    - name: Autobuild
-      uses: github/codeql-action/autobuild@v2
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
 
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v2
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
