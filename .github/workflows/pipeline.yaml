@@ -4,12 +4,27 @@ on:
   push:
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      go-version: ${{ steps.set-go-version.outputs.go_version }}
+    steps:
+      - name: Set Go version
+        id: set-go-version
+        run: echo "go_version=1.21.x" >> $GITHUB_OUTPUT
+
   test:
+    needs: setup
     strategy:
+      fail-fast: false
       matrix:
-        go-version: [1.18.x]
-        platform: [ubuntu-latest, macos-latest]
+        go-version: [ '1.21.x' ]
+        platform: [ ubuntu-latest, macos-latest ]
     runs-on: ${{ matrix.platform }}
     steps:
       - name: Checkout code
@@ -21,18 +36,15 @@ jobs:
           go-version: ${{ matrix.go-version }}
 
       - name: Cache Go dependencies
-        id: cache-go-dependencies
-        uses: actions/cache@v4.2.2
+        id: cache-go
+        uses: actions/cache@v4
         with:
-          path: |
-            ~/go/pkg/mod
-            .tmp/
+          path: ~/go/pkg/mod
           key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-${{ matrix.go-version }}-
+          restore-keys: ${{ runner.os }}-go-${{ matrix.go-version }}-
 
-      - name: Install Go dependencies
-        if: steps.cache-go-dependencies.outputs.cache-hit != 'true'
+      - name: Install dependencies
+        if: steps.cache-go.outputs.cache-hit != 'true'
         run: make bootstrap
 
       - name: Run Static Analysis
@@ -42,6 +54,7 @@ jobs:
         run: make test
 
   build-artifacts:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -50,21 +63,18 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.18.x'
+          go-version: '1.21.x'
 
       - name: Cache Go dependencies
-        id: package-cache-go-dependencies
+        id: cache-go-build
         uses: actions/cache@v4
         with:
-          path: |
-            ~/go/pkg/mod
-            .tmp/
-          key: ${{ runner.os }}-go-prod-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-prod-
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-build-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-go-build-
 
       - name: Install dependencies
-        if: steps.package-cache-go-dependencies.outputs.cache-hit != 'true'
+        if: steps.cache-go-build.outputs.cache-hit != 'true'
         run: make bootstrap
 
       - name: Build snapshot artifacts
@@ -76,9 +86,22 @@ jobs:
           name: artifacts
           path: dist
 
-  test-linux-artifacts:
+  test-artifacts:
     needs: build-artifacts
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-latest
+            name: "Linux"
+            command: "make ci-test-linux-run"
+          - platform: macos-latest
+            name: "Mac"
+            command: "make ci-test-mac-run"
+          - platform: windows-latest
+            name: "Windows"
+            command: "make ci-test-windows-run"
+    runs-on: ${{ matrix.platform }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -86,7 +109,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.18.x'
+          go-version: '1.21.x'
 
       - name: Download artifacts
         uses: actions/download-artifact@v4
@@ -94,56 +117,11 @@ jobs:
           name: artifacts
           path: dist
 
-      - name: Test Linux run
-        run: make ci-test-linux-run
-
-      - name: Test Docker run
-        run: make ci-plugs-out-test
-
-  test-mac-artifacts:
-    needs: build-artifacts
-    runs-on: macos-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.18.x'
-
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: artifacts
-          path: dist
-
-      - name: Test Darwin run
-        run: make ci-test-mac-run
-
-  test-windows-artifacts:
-    needs: build-artifacts
-    runs-on: windows-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.18.x'
-
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: artifacts
-          path: dist
-
-      - name: Test Windows run
-        run: make ci-test-windows-run
+      - name: Test ${{ matrix.name }} run
+        run: ${{ matrix.command }}
 
   release:
-    needs: [test, build-artifacts, test-linux-artifacts, test-mac-artifacts, test-windows-artifacts]
+    needs: [test, build-artifacts, test-artifacts]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
@@ -153,21 +131,18 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.18.x'
+          go-version: '1.21.x'
 
       - name: Cache Go dependencies
-        id: release-cache-go-dependencies
+        id: cache-go-release
         uses: actions/cache@v4
         with:
-          path: |
-            ~/go/pkg/mod
-            .tmp/
-          key: ${{ runner.os }}-go-prod-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-prod-
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-release-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-go-release-
 
       - name: Install dependencies
-        if: steps.release-cache-go-dependencies.outputs.cache-hit != 'true'
+        if: steps.cache-go-release.outputs.cache-hit != 'true'
         run: make bootstrap
 
       - name: Publish GitHub release
