@@ -76,16 +76,16 @@ jobs:
         go-version: [1.18.x]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v5
         with:
           go-version: '1.18.x'
 
       - name: Cache Go dependencies
         id: package-cache-go-dependencies
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: |
             ~/go/pkg/mod/cache
@@ -95,7 +95,6 @@ jobs:
 
       - name: Install dependencies
         run: go mod download
-
       - name: Build snapshot artifacts
         run: make ci-build-snapshot-packages
 
